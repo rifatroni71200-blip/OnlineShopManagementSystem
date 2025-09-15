@@ -1,0 +1,184 @@
+/*
+================================================================================
+Online Shop Management System - Database Creation Script
+================================================================================
+This script creates all necessary tables for a new database.
+It should be run on an empty database (e.g., 'OnlineShopDB').
+*/
+ 
+-- =================================================================
+-- Step 1: Create Foundation Tables (No Dependencies)
+-- =================================================================
+ 
+CREATE TABLE Customer (
+    custID INT PRIMARY KEY,
+    custName NVARCHAR(255) NOT NULL,
+    password NVARCHAR(MAX) NOT NULL,
+    email NVARCHAR(255) UNIQUE NOT NULL,
+    status NVARCHAR(50) NOT NULL DEFAULT 'Active',
+    profilePicture NVARCHAR(MAX),
+    phoneNum NVARCHAR(20)
+);
+ 
+CREATE TABLE Staff (
+    staffID INT PRIMARY KEY,
+    staffName NVARCHAR(255) NOT NULL,
+    password NVARCHAR(MAX) NOT NULL,
+    email NVARCHAR(255) UNIQUE NOT NULL,
+    status NVARCHAR(50) NOT NULL DEFAULT 'Active',
+    profilePicture NVARCHAR(MAX),
+    phoneNum NVARCHAR(20),
+    icNum NVARCHAR(50) UNIQUE,
+    position NVARCHAR(100) NOT NULL
+);
+ 
+CREATE TABLE Category (
+    categoryID INT IDENTITY(1,1) PRIMARY KEY,
+    name NVARCHAR(255) NOT NULL UNIQUE
+);
+ 
+CREATE TABLE DeliveryMethod (
+    methodID INT IDENTITY(1,1) PRIMARY KEY,
+    methodName NVARCHAR(100) NOT NULL,
+    cost DECIMAL(18, 2) NOT NULL,
+    deliveryTime NVARCHAR(100),
+    status NVARCHAR(50) NOT NULL DEFAULT 'Active'
+);
+ 
+CREATE TABLE Promo (
+    promoCode NVARCHAR(50) PRIMARY KEY,
+    promoName NVARCHAR(255) NOT NULL,
+    promoDesc NVARCHAR(MAX),
+    rate DECIMAL(5, 2) NOT NULL,
+    limitQty INT,
+    startDate DATETIME2 NOT NULL,
+    endDate DATETIME2 NOT NULL,
+    status NVARCHAR(50) NOT NULL DEFAULT 'Active'
+);
+ 
+-- =================================================================
+-- Step 2: Create Core E-Commerce & Customer-Specific Tables
+-- =================================================================
+ 
+CREATE TABLE Product (
+    productID INT IDENTITY(1,1) PRIMARY KEY,
+    categoryID INT NOT NULL,
+    productName NVARCHAR(255) NOT NULL,
+    productDesc NVARCHAR(MAX),
+    unitPrice DECIMAL(18, 2) NOT NULL,
+    stockQty INT NOT NULL DEFAULT 0,
+    status NVARCHAR(50) NOT NULL DEFAULT 'Available',
+    productImg NVARCHAR(MAX),
+    CONSTRAINT FK_Product_Category FOREIGN KEY (categoryID) REFERENCES Category(categoryID)
+);
+ 
+CREATE TABLE Address (
+    addressID INT IDENTITY(1,1) PRIMARY KEY,
+    custID INT NOT NULL,
+    street NVARCHAR(255) NOT NULL,
+    city NVARCHAR(100) NOT NULL,
+    state NVARCHAR(100) NOT NULL,
+    postcode NVARCHAR(20) NOT NULL,
+    country NVARCHAR(100) NOT NULL,
+    status NVARCHAR(50) NOT NULL DEFAULT 'Active',
+    CONSTRAINT FK_Address_Customer FOREIGN KEY (custID) REFERENCES Customer(custID) ON DELETE CASCADE
+);
+ 
+CREATE TABLE [Order] (
+    orderID INT IDENTITY(1,1) PRIMARY KEY,
+    custID INT NOT NULL,
+    addressID INT NOT NULL,
+    orderStatus NVARCHAR(50) NOT NULL DEFAULT 'Pending',
+    promoCode NVARCHAR(50),
+    orderDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+    lastUpdateOn DATETIME2 NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT FK_Order_Customer FOREIGN KEY (custID) REFERENCES Customer(custID),
+    CONSTRAINT FK_Order_Address FOREIGN KEY (addressID) REFERENCES Address(addressID),
+    CONSTRAINT FK_Order_Promo FOREIGN KEY (promoCode) REFERENCES Promo(promoCode)
+);
+ 
+CREATE TABLE Cart (
+    cartID INT IDENTITY(1,1) PRIMARY KEY,
+    custID INT NOT NULL UNIQUE,
+    CONSTRAINT FK_Cart_Customer FOREIGN KEY (custID) REFERENCES Customer(custID) ON DELETE CASCADE
+);
+ 
+CREATE TABLE Wishlist (
+    wishlistID INT IDENTITY(1,1) PRIMARY KEY,
+    custID INT NOT NULL UNIQUE,
+    CONSTRAINT FK_Wishlist_Customer FOREIGN KEY (custID) REFERENCES Customer(custID) ON DELETE CASCADE
+);
+ 
+-- =================================================================
+-- Step 3: Create Transactional, Supporting, and Join Tables
+-- =================================================================
+ 
+CREATE TABLE Payment (
+    paymentID INT IDENTITY(1,1) PRIMARY KEY,
+    orderID INT NOT NULL,
+    paymentMethod NVARCHAR(100) NOT NULL,
+    paymentDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+    amountPaid DECIMAL(18, 2) NOT NULL,
+    CONSTRAINT FK_Payment_Order FOREIGN KEY (orderID) REFERENCES [Order](orderID) ON DELETE CASCADE
+);
+ 
+CREATE TABLE Shipping (
+    shippingID INT IDENTITY(1,1) PRIMARY KEY,
+    orderID INT NOT NULL,
+    staffID INT,
+    shippingStatus NVARCHAR(50) NOT NULL DEFAULT 'Processing',
+    trackingNumber NVARCHAR(255),
+    expectedDeliveryDate DATETIME2,
+    actualDeliveryDate DATETIME2,
+    CONSTRAINT FK_Shipping_Order FOREIGN KEY (orderID) REFERENCES [Order](orderID),
+    CONSTRAINT FK_Shipping_Staff FOREIGN KEY (staffID) REFERENCES Staff(staffID)
+);
+ 
+CREATE TABLE Review (
+    reviewID INT IDENTITY(1,1) PRIMARY KEY,
+    orderID INT NOT NULL,
+    custID INT NOT NULL,
+    productID INT NOT NULL,
+    reviewText NVARCHAR(MAX),
+    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    reviewDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT FK_Review_Order FOREIGN KEY (orderID) REFERENCES [Order](orderID),
+    CONSTRAINT FK_Review_Customer FOREIGN KEY (custID) REFERENCES Customer(custID),
+    CONSTRAINT FK_Review_Product FOREIGN KEY (productID) REFERENCES Product(productID)
+);
+ 
+CREATE TABLE OrderItem (
+    orderID INT NOT NULL,
+    productID INT NOT NULL,
+    productQty INT NOT NULL,
+    price DECIMAL(18, 2) NOT NULL,
+    CONSTRAINT PK_OrderItem PRIMARY KEY (orderID, productID),
+    CONSTRAINT FK_OrderItem_Order FOREIGN KEY (orderID) REFERENCES [Order](orderID) ON DELETE CASCADE,
+    CONSTRAINT FK_OrderItem_Product FOREIGN KEY (productID) REFERENCES Product(productID)
+);
+ 
+CREATE TABLE CartItem (
+    cartID INT NOT NULL,
+    productID INT NOT NULL,
+    productQty INT NOT NULL,
+    price DECIMAL(18, 2) NOT NULL,
+    CONSTRAINT PK_CartItem PRIMARY KEY (cartID, productID),
+    CONSTRAINT FK_CartItem_Cart FOREIGN KEY (cartID) REFERENCES Cart(cartID) ON DELETE CASCADE,
+    CONSTRAINT FK_CartItem_Product FOREIGN KEY (productID) REFERENCES Product(productID)
+);
+ 
+CREATE TABLE WishlistItem (
+    wishlistID INT NOT NULL,
+    productID INT NOT NULL,
+    CONSTRAINT PK_WishlistItem PRIMARY KEY (wishlistID, productID),
+    CONSTRAINT FK_WishlistItem_Wishlist FOREIGN KEY (wishlistID) REFERENCES Wishlist(wishlistID) ON DELETE CASCADE,
+    CONSTRAINT FK_WishlistItem_Product FOREIGN KEY (productID) REFERENCES Product(productID)
+);
+GO
+ 
+-- =================================================================
+-- Step 4: Insert Default Admin User
+-- =================================================================
+INSERT INTO Staff (staffID, staffName, password, email, position, status, icNum)
+VALUES (1000000, 'admin', 'admin2402', 'admin@shop.com', 'Admin', 'Active', '786');
+GO
